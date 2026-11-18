@@ -8,6 +8,13 @@ def connection():
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, body TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, decision TEXT NOT NULL DEFAULT "待复核")')
     db.execute('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)')
+    db.execute(
+        '''CREATE TABLE IF NOT EXISTS aliases (
+             field TEXT NOT NULL, raw_name TEXT NOT NULL,
+             canonical_name TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '',
+             status TEXT NOT NULL DEFAULT 'PENDING', evidence TEXT NOT NULL DEFAULT '',
+             updated_run TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0,
+             PRIMARY KEY(field,raw_name))''')
     return db
 
 def save(run_id, body):

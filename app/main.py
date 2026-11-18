@@ -3,7 +3,7 @@ from flask import Flask,jsonify,request,redirect,Response
 from app.config import MODULES
 from app.errors import DomainError
 from app.workflow import run,load
-from app import store
+from app import store, alias_db
 from app.web import payload
 from app.modules.m7_archive.export_out import bundle
 
@@ -20,7 +20,9 @@ def create_app():
     def health():return jsonify(status='ok')
     @app.post('/api/runs')
     def submit():
-        content,params=payload();state=run(content,params);return jsonify(store.save(state['run_id'],state))
+        content, params = payload()
+        state = run(content, params, saved_aliases=alias_db.saved_decisions())
+        return jsonify(store.save(state['run_id'], state))
     @app.get('/api/runs')
     def list_runs():return jsonify(store.history())
     @app.get('/api/runs/<run_id>')

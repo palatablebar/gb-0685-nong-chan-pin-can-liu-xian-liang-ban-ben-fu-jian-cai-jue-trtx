@@ -1,1 +1,128 @@
-{% extends "base.html" %}{% block content %}<div class="slips"><section class="panel wide"><header><h2>检验项目索引</h2><span>{{data.rows|length}} 行</span></header><div class="scroll"><table><thead><tr><th>样本</th><th>产品</th><th>残留项目</th><th>方法</th><th>结果单位</th><th>来源ID</th></tr></thead><tbody>{% for r in data.rows %}<tr><td>{{r.sample_id}}</td><td>{{r.product}}</td><td>{{r.analyte}}</td><td>{{r.method}}</td><td>{{r.unit}}</td><td>{{r.id}}</td></tr>{% endfor %}</tbody></table></div></section><section class="panel index-slip"><header><h2>方法卡</h2></header>{% if data.rows %}{% set r=data.rows[0] %}<div class="test-label"><span>{{r.product}} / {{r.analyte}}</span><b>{{r.method}}</b><div>LOD {{r.lod}} {{r.unit}}</div><small>{{r.sample_id}}</small></div>{% endif %}</section>{% include "quarantine_slip.html" %}</div>{% endblock %}
+{% extends "base.html" %}{% block content %}
+<div class="slips">
+  <section class="panel wide adj-panel">
+    <header>
+      <h2>名称裁决清单</h2>
+      <span>自动 {{data.mapping_summary.auto}} · 已确认 {{data.mapping_summary.confirmed}} ·
+        暂缓 {{data.mapping_summary.pending}} · 拒绝 {{data.mapping_summary.rejected}}</span>
+    </header>
+    <div class="scroll">
+      <table class="adj-table">
+        <thead>
+          <tr>
+            <th>字段</th><th>报告原名称</th><th>归并依据</th><th>采用标准名/限量</th>
+            <th>复检结论</th><th>受影响行</th><th>裁决</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in data.name_decisions %}
+          {% set verdict = data.verdicts_by_name.get((d.field, d.raw_name), '暂缓未判级') %}
+          <tr class="adj-row status-{{d.status|lower}}">
+            <td>{{'产品' if d.field=='product' else '残留项目'}}</td>
+            <td class="raw-name"><b>{{d.raw_name}}</b>
+              <small>{{d.evidence}}</small>
+              {% if d.candidates %}
+              <small class="cands">候选：{% for c in d.candidates %}{{c.name}}({{c.score}}){% if not loop.last %}、{% endif %}{% endfor %}</small>
+              {% endif %}
+            </td>
+            <td><span class="reason-tag">{{d.reason}}</span><br><small class="status-text status-{{d.status|lower}}">{{d.status}}</small></td>
+            <td>
+              {% if d.canonical_name %}
+                <b>{{d.canonical_name}}</b>
+                <small>{{ data.limit_hints.get((d.field, d.raw_name), '限量随采样日选版') }}</small>
+              {% else %}<span class="reject">未采用限量</span>{% endif %}
+            </td>
+            <td>
+              {% if verdict == '暂缓未判级' %}<span class="verdict uncertain">HOLD</span>
+              {% elif verdict == 'REJECTED' %}<span class="verdict fail">REJECTED</span>
+              {% else %}<span class="verdict {{verdict|lower}}">{{verdict}}</span>{% endif %}
+            </td>
+            <td class="num">{{d.affected_lines|join(', ') or '—'}}</td>
+            <td class="adj-actions">
+              <select data-field="{{d.field}}" data-raw="{{d.raw_name}}" data-reason="{{d.reason}}" data-evidence="{{d.evidence}}"
+                      {% if d.status in ('AUTO',) %}disabled title="确定性规整，无需人工裁决"{% endif %}>
+                <option value="PENDING" {{'selected' if d.status=='PENDING'}}>暂缓</option>
+                {% for c in d.candidates %}
+                <option value="{{c.name}}" {{'selected' if d.canonical_name==c.name}}>确认→{{c.name}}</option>
+                {% endfor %}
+                {% if d.canonical_name and d.canonical_name not in d.candidates|map(attribute='name') %}
+                <option value="{{d.canonical_name}}" selected>确认→{{d.canonical_name}}</option>
+                {% endif %}
+                <option value="__REJECT__" {{'selected' if d.status=='REJECTED'}}>拒绝归并</option>
+              </select>
+              <button class="adj-save">提交裁决</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="slip-tail">名称裁决 / NAME ADJUDICATION · 同源重跑不新增别名、不改写已确认关系</div>
+  </section>
+
+  <section class="panel index-slip">
+    <header><h2>已采纳索引</h2><span>{{data.rows|length}} 行</span></header>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>样本</th><th>原产品</th><th>原项目</th><th>归并后</th></tr></thead>
+        <tbody>
+          {% for r in data.rows %}
+          <tr><td>{{r.sample_id}}</td><td>{{r.product_raw}}</td><td>{{r.analyte_raw}}</td>
+            <td>{{r.product}} / {{r.analyte}}<br><small>{{r.product_mapping}} · {{r.analyte_mapping}}</small></td>
+          </tr>
+          {% else %}<tr><td colspan="4">暂无已采纳行</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel held-slip">
+    <header><h2>暂缓记录</h2><span>{{data.held_rows|length}} 行</span></header>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>行</th><th>报告ID</th><th>产品原名</th><th>项目原名</th></tr></thead>
+        <tbody>
+          {% for r in data.held_rows %}
+          <tr><td class="num">{{r._line}}</td><td>{{r.id}}</td><td>{{r.product_raw}}</td><td>{{r.analyte_raw}}</td></tr>
+          {% else %}<tr><td colspan="4">无暂缓记录</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="slip-tail">暂缓不隔离、不判级，确认后仅重算受影响项目</div>
+  </section>
+
+  {% include "quarantine_slip.html" %}
+</div>
+
+<script>
+document.querySelectorAll('.adj-save').forEach(function(btn){
+  btn.addEventListener('click', async function(){
+    const sel = btn.parentElement.querySelector('select');
+    const field = sel.dataset.field, rawName = sel.dataset.raw;
+    const reason = sel.dataset.reason, evidence = sel.dataset.evidence;
+    let body, url = '/api/m2_mapping/aliases';
+    if (sel.value === '__REJECT__') {
+      body = {field: field, raw_name: rawName, status: 'REJECTED', reason: reason, evidence: evidence};
+    } else if (sel.value === 'PENDING') {
+      url = '/api/m2_mapping/aliases/reset';
+      body = {field: field, raw_name: rawName};
+    } else {
+      body = {field: field, raw_name: rawName, status: 'CONFIRMED', canonical_name: sel.value, reason: reason, evidence: evidence};
+    }
+    const msg = document.getElementById('status-message');
+    msg.textContent = '裁决提交中…';
+    try {
+      const resp = await fetch(url, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+      const data = await resp.json();
+      if (!resp.ok) throw Error(data.message);
+      msg.textContent = sel.value === 'PENDING' ? '已暂缓，受影响项目回到待裁决态'
+        : ('关系已' + (body.status==='CONFIRMED'?'确认':'拒绝') + '，受影响项目已重算');
+      location.reload();
+    } catch (e) { msg.textContent = e.message + '，旧版结果保留'; }
+  });
+});
+</script>
+{% endblock %}

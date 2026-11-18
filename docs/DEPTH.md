@@ -7,7 +7,7 @@
 | 模块 | 使用者动作 | 入口 | 核心文件 | 测试 |
 |---|---|---|---|---|
 | M1 报告采信 | 查看并复算报告采信 | `/api/m1_ingest` | `app/modules/m1_ingest/reader.py` | `tests/test_ingest.py` |
-| M2 项目映射 | 查看并复算项目映射 | `/api/m2_mapping` | `app/modules/m2_mapping/rules.py` | `tests/test_mapping.py` |
+| M2 项目映射 | 裁决名称关系并复算项目映射 | `/api/m2_mapping`、`/api/m2_mapping/aliases` | `app/modules/m2_mapping/rules.py`、`app/modules/m2_mapping/matching.py` | `tests/test_mapping.py`、`tests/test_name_adjudication.py`、`tests/test_alias_api.py` |
 | M3 限量选版 | 查看并复算限量选版 | `/api/m3_versions` | `app/modules/m3_versions/rules.py` | `tests/test_versions.py` |
 | M4 检出量换算 | 查看并复算检出量换算 | `/api/m4_segments` | `app/modules/m4_segments/rules.py` | `tests/test_segments.py` |
 | M5 复检裁决 | 查看并复算复检裁决 | `/api/m5_calculate` | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py` |
@@ -32,10 +32,15 @@
 | TRAP-15 | ug/kg与mg/kg | 差1000倍 | 浓度统一mg/kg | `app/modules/m4_segments/rules.py` | `tests/test_segments.py::test_unit_conversion` |
 | TRAP-25 | 标准时间边界 | 双版或错版 | 采样日半开区间选版 | `app/modules/m3_versions/standards.py` | `tests/test_versions.py::test_halfopen_effective` |
 | TRAP-20 | 复检引用环 | 遍历无法结束 | 引用路径检测 | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py::test_cycle_rejected` |
+| TRAP-30 | 全角项目名 | 与限量标准逐字匹配失败 | NFKC 唯一规整自动确认，原名保形 | `app/modules/m2_mapping/matching.py` | `tests/test_name_adjudication.py::test_fullwidth_analyte_auto_normalized` |
+| TRAP-31 | 简称/旧称套错限量 | 相似即合并 | 登记仅作证据，必须人工 CONFIRMED | `app/modules/m2_mapping/matching.py` | `tests/test_name_adjudication.py::test_registry_alias_still_requires_manual` |
+| TRAP-32 | 编号相近（P01/P010） | 相似度高自动归并 | 一律 PENDING 暂缓，候选仅展示 | `app/modules/m2_mapping/matching.py` | `tests/test_name_adjudication.py::test_similar_code_must_stay_pending` |
+| TRAP-33 | 同源重跑改写关系 | 重跑重建别名表 | 关系独立持久化，重跑只合并不改写 | `app/alias_db.py`、`app/modules/m2_mapping/matching.py` | `tests/test_alias_api.py::test_rerun_with_same_relations_is_idempotent` |
+| TRAP-34 | 关系变更覆盖旧结果 | 同 run_id 插入覆盖 | 关系快照纳入 run_id，失败保留旧版 | `app/manifest.py`、`app/store.py` | `tests/test_alias_api.py::test_confirm_unknown_target_rejected_and_old_result_kept` |
 
 ## 对账规则
 
-输入行数=采纳+隔离+空行+重复表头+完全重复；业务总数与计算证据独立求和。隔离行保留来源行、ID、原因码与原值。
+输入行数=采纳+隔离+暂缓+空行+重复表头+完全重复；业务总数与计算证据独立求和。隔离行保留来源行、ID、原因码与原值；暂缓行与名称裁决清单随归档证据导出，原始报告名称不丢失。
 
 ## 已知不覆盖
 
